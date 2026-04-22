@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Mosaic</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- UI CONTROLS -->
+<div id="ui">
+  <div id="streakDisplay">🔥 0</div>
+  <button id="labelsBtn" onclick="toggleLabels()">#</button>
+  <button id="themeBtn" onclick="toggleTheme()">🌙</button>
+  <button id="calendarBtn" onclick="toggleCalendar()">📅</button>
+</div>
+
+<!-- CALENDAR PANEL -->
+<div id="calendar" class="hidden">
+  <div id="calendar-header">
+    <button onclick="changeMonth(-1)">◀</button>
+    <span id="calendar-title"></span>
+    <button onclick="changeMonth(1)">▶</button>
+	<button onclick="goToToday()">Today</button>
+  </div>
+  <div id="calendar-grid"></div>
+</div>
+
+<!-- WIN OVERLAY -->
+<div id="winOverlay">
+  <div id="winBox">
+    <button id="winCloseBtn" onclick="closeWinOverlay()" aria-label="Close">✕</button>
+
+    <h2>Puzzle Complete!</h2>
+
+    <div id="winSharePreview"></div>
+    <div id="winNext">Come back tomorrow for a new puzzle.</div>
+
+    <button onclick="copyResult()">Copy Result</button>
+    <div id="copyMsg">Copied!</div>
+  </div>
+</div>
+
+<!-- Support Overlay -->
+<div id="supportUi">
+  <button id="supportBtn" onclick="openSupportOverlay()">Tip the Creator</button>
+</div>
+
+<div id="supportOverlay">
+  <div id="supportBox">
+    <button id="supportCloseBtn" onclick="closeSupportOverlay()" aria-label="Close support overlay">✕</button>
+    <h2>Enjoying the game?</h2>
+    <p>Support it.</p>
+    <a
+      id="supportLink"
+      href="YOUR_KOFI_LINK_HERE"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      Visit Ko-fi
+    </a>
+  </div>
+</div>
+
+<!-- BEGIN OVERLAY -->
+<div id="beginOverlay">
+  <div id="beginBox">
+    <div id="beginDate"></div>
+    <button id="beginBtn" onclick="closeBeginOverlay()">Begin</button>
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script src="puzzleIndex.js"></script>
+<script src="game.js"></script>
+
+</body>
+</html>
