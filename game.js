@@ -405,6 +405,7 @@ async function loadPuzzle(dayIndex) {
     showWin = true;
     moveCount = data.moves;
     pieces = [];
+	clearCurrentPuzzleProgress(dayIndex);
   }
 
   document.getElementById("winOverlay").classList.remove("active");
@@ -412,6 +413,10 @@ async function loadPuzzle(dayIndex) {
 
   resizeCanvas(true);
   buildCalendar();
+  if (!showWin) {
+    applySavedPuzzleProgress(dayIndex);
+    render();
+  }
   if (getLayoutMode() === "phone") {
     openBeginOverlay();
   }
@@ -1427,6 +1432,7 @@ function endPointer() {
 
   if (dropValid) {
     placePiece(draggingPiece, dropGX, dropGY);
+	saveCurrentPuzzleProgress();
 
     if (checkWin() && !showWin && !winAnimationActive) {
       const key = "puzzle_" + getDateKey(selectedDay);
@@ -1435,6 +1441,7 @@ function endPointer() {
         completed: true,
         moves: moveCount
       }));
+	  clearCurrentPuzzleProgress(selectedDay);
 
       const realTodayKey = getTodayKey();
       const realYesterdayKey = getYesterdayKey();
@@ -1467,7 +1474,12 @@ function endPointer() {
       startWinSequence();
     }
   } else {
-    restoreDraggedPiece();
+    if (dragStartPlaced) {
+      returnPieceToTray(draggingPiece);
+      saveCurrentPuzzleProgress();
+    } else {
+      restoreDraggedPiece();
+    }
   }
 
   ghostValid = false;
@@ -1724,6 +1736,79 @@ function isValidPuzzleData(data) {
     Array.isArray(data.filled_cells) &&
     Array.isArray(data.shapes)
   );
+}
+
+function getProgressKey(dayIndex) {
+  return "puzzle_state_" + getDateKey(dayIndex);
+}
+
+function saveCurrentPuzzleProgress() {
+  if (!currentData || showWin) return;
+
+  const key = getProgressKey(selectedDay);
+
+  const placedPieces = pieces
+    .filter(p => p.placed)
+    .map(p => ({
+      label: p.label,
+      gridX: p.gridX,
+      gridY: p.gridY
+    }));
+
+  localStorage.setItem(key, JSON.stringify({
+    moves: moveCount,
+    placedPieces
+  }));
+}
+
+function clearCurrentPuzzleProgress(dayIndex = selectedDay) {
+  localStorage.removeItem(getProgressKey(dayIndex));
+}
+
+function applySavedPuzzleProgress(dayIndex) {
+  const raw = localStorage.getItem(getProgressKey(dayIndex));
+  if (!raw) return false;
+
+  try {
+    const data = JSON.parse(raw);
+    const placedMap = new Map(
+      (data.placedPieces || []).map(p => [p.label, p])
+    );
+
+    moveCount = Number.isInteger(data.moves) ? data.moves : 0;
+
+    pieces.forEach(piece => {
+      const saved = placedMap.get(piece.label);
+
+      if (saved) {
+        piece.placed = true;
+        piece.gridX = saved.gridX;
+        piece.gridY = saved.gridY;
+        piece.x = saved.gridX * cellSize;
+        piece.y = saved.gridY * cellSize;
+      } else {
+        piece.placed = false;
+        piece.gridX = 0;
+        piece.gridY = 0;
+        piece.x = piece.trayX;
+        piece.y = piece.trayY;
+      }
+    });
+
+    return true;
+  } catch (err) {
+    console.error("Failed to restore puzzle progress:", err);
+    localStorage.removeItem(getProgressKey(dayIndex));
+    return false;
+  }
+}
+
+function returnPieceToTray(piece) {
+  piece.placed = false;
+  piece.gridX = 0;
+  piece.gridY = 0;
+  piece.x = piece.trayX;
+  piece.y = piece.trayY;
 }
 
 // -----------------------------
