@@ -1431,8 +1431,12 @@ function endPointer() {
   const dropValid = canPlace(draggingPiece, dropGX, dropGY);
 
   if (dropValid) {
-    placePiece(draggingPiece, dropGX, dropGY);
-	saveCurrentPuzzleProgress();
+    if (isSamePlacement(draggingPiece, dropGX, dropGY)) {
+      restoreDraggedPiece();
+    } else {
+      placePiece(draggingPiece, dropGX, dropGY);
+      saveCurrentPuzzleProgress();
+    }
 
     if (checkWin() && !showWin && !winAnimationActive) {
       const key = "puzzle_" + getDateKey(selectedDay);
@@ -1809,6 +1813,10 @@ function returnPieceToTray(piece) {
   piece.gridY = 0;
   piece.x = piece.trayX;
   piece.y = piece.trayY;
+}
+
+function isSamePlacement(piece, gx, gy) {
+  return dragStartPlaced && dragStartGridX === gx && dragStartGridY === gy;
 }
 
 // -----------------------------

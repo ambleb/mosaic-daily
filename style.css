@@ -188,6 +188,8 @@ canvas {
 
 /* Win box */
 #winBox {
+  background: #fbf7ef;
+  color: var(--text);
   position: relative;
   pointer-events: auto;
   background: var(--bg);
@@ -198,6 +200,11 @@ canvas {
   min-width: 280px;
   max-width: 360px;
   font-family: Georgia, "Times New Roman", serif;
+}
+
+body.dark #winBox {
+  background: #2b2f36;
+  color: var(--text);
 }
 
 #winBox h2 {
