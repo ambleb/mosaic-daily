@@ -771,7 +771,7 @@ function getPhoneTrayMetrics(boardWidth, boardHeight) {
 
   const trayMargin = layout.sideMargin;
   const trayGapAbove = 16;
-  const trayHeight = cellSize * 4 + 60;
+  const trayHeight = cellSize * 4 + 72;
 
   return {
     x: trayMargin,
