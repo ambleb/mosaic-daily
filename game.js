@@ -1,10 +1,21 @@
 // -----------------------------
+// CONSTANTS / DOM
+// -----------------------------
+const PUZZLE_EPOCH_DATE = new Date(2024, 0, 1);
+const CALENDAR_START_DATE = new Date(2026, 2, 20); // March 20, 2026
+
+const TOUCH_DRAG_THRESHOLD = 12;
+const WIN_ANIMATION_DURATION = 550;
+const WIN_OVERLAY_DELAY = 180;
+
 let cellSize = 30;
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-const CALENDAR_START_DATE = new Date(2026, 2, 20); // March 20, 2026
 
+// -----------------------------
+// APP STATE
+// -----------------------------
 let currentData = null;
 let shapeColors = [];
 let showBeginOverlay = false;
@@ -19,13 +30,12 @@ let dragStartX = 0;
 let dragStartY = 0;
 let dragStartGridX = 0;
 let dragStartGridY = 0;
+
 let pendingTouchPiece = null;
 let pendingTouchOffsetX = 0;
 let pendingTouchOffsetY = 0;
 let pendingTouchStartClientX = 0;
 let pendingTouchStartClientY = 0;
-
-const TOUCH_DRAG_THRESHOLD = 12;
 
 let trayScrollX = 0;
 let trayMaxScrollX = 0;
@@ -33,10 +43,9 @@ let trayViewport = null;
 
 let traySwipeActive = false;
 let traySwipeStartX = 0;
+let traySwipeStartY = 0;
 let traySwipeStartScrollX = 0;
 let traySwipeTouchId = null;
-let pendingTrayPiece = null;
-let traySwipeStartY = 0;
 
 let ghostValid = false;
 let ghostGX = 0;
@@ -52,9 +61,6 @@ let labelsEnabled = false;
 let winAnimationActive = false;
 let winAnimationProgress = 0;
 
-const WIN_ANIMATION_DURATION = 550;
-const WIN_OVERLAY_DELAY = 180;
-
 let selectedDay = 0;
 let calendarOffset = 0;
 
@@ -62,37 +68,54 @@ let lastLayoutMode = null;
 let lastOrientation = null;
 
 // -----------------------------
-// STREAK SYSTEM
+// STREAK STATE
 // -----------------------------
 let streakCurrent = 0;
 let streakBest = 0;
 let lastCompletedDate = null;
 
-function loadStreak() {
-  streakCurrent = parseInt(localStorage.getItem("streak_current")) || 0;
-  streakBest = parseInt(localStorage.getItem("streak_best")) || 0;
-  lastCompletedDate = localStorage.getItem("last_completed_date");
-
-  updateStreakDisplay();
-}
-
-function updateStreakDisplay() {
-  const el = document.getElementById("streakDisplay");
-  if (el) el.textContent = `🔥 ${streakCurrent}`;
+// -----------------------------
+// DATE HELPERS
+// -----------------------------
+function normalizeDate(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function formatLocalDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const d = normalizeDate(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
+function getPuzzleDate(dayIndex) {
+  const date = new Date(PUZZLE_EPOCH_DATE);
+  date.setDate(PUZZLE_EPOCH_DATE.getDate() + dayIndex);
+  return date;
+}
+
+function getDayIndexFromDate(date) {
+  const base = normalizeDate(PUZZLE_EPOCH_DATE);
+  const target = normalizeDate(date);
+  return Math.floor((target - base) / (1000 * 60 * 60 * 24));
+}
+
 function getDateKey(dayIndex) {
-  const startDate = new Date(2024, 0, 1);
-  const date = new Date(startDate);
-  date.setDate(startDate.getDate() + dayIndex);
-  return formatLocalDateKey(date);
+  return formatLocalDateKey(getPuzzleDate(dayIndex));
+}
+
+function formatPuzzleDate(dayIndex, format = "long") {
+  const puzzleDate = getPuzzleDate(dayIndex);
+
+  const options =
+    format === "short"
+      ? { month: "short", day: "numeric", year: "numeric" }
+      : { month: "long", day: "numeric", year: "numeric" };
+
+  return puzzleDate.toLocaleDateString(undefined, options);
 }
 
 function getTodayKey() {
@@ -105,68 +128,232 @@ function getYesterdayKey() {
   return formatLocalDateKey(d);
 }
 
+function getDailyIndex() {
+  return getDayIndexFromDate(new Date());
+}
+
 function getCalendarStartIndex() {
-  const startDate = new Date(2024, 0, 1);
-  const minDate = new Date(CALENDAR_START_DATE);
-
-  startDate.setHours(0, 0, 0, 0);
-  minDate.setHours(0, 0, 0, 0);
-
-  return Math.floor((minDate - startDate) / (1000 * 60 * 60 * 24));
+  return getDayIndexFromDate(CALENDAR_START_DATE);
 }
 
 function getLastAvailablePuzzleIndex() {
   return getCalendarStartIndex() + puzzleFiles.length - 1;
 }
 
-function getPuzzleDate(dayIndex) {
-  const startDate = new Date(2024, 0, 1);
-  const date = new Date(startDate);
-  date.setDate(startDate.getDate() + dayIndex);
-  return date;
+// -----------------------------
+// STORAGE HELPERS
+// -----------------------------
+function getCompletedKey(dayIndex) {
+  return "puzzle_" + getDateKey(dayIndex);
+}
+
+function getProgressKey(dayIndex) {
+  return "puzzle_state_" + getDateKey(dayIndex);
+}
+
+function getViewedDayStorageKey() {
+  return "viewed_day";
+}
+
+function getThemeStorageKey() {
+  return "theme";
+}
+
+function getLabelsStorageKey() {
+  return "piece_labels";
+}
+
+function getStreakCurrentStorageKey() {
+  return "streak_current";
+}
+
+function getStreakBestStorageKey() {
+  return "streak_best";
+}
+
+function getLastCompletedDateStorageKey() {
+  return "last_completed_date";
+}
+
+function isCompleted(dayIndex) {
+  return localStorage.getItem(getCompletedKey(dayIndex)) !== null;
+}
+
+function saveCompletedPuzzleState(dayIndex, moves) {
+  localStorage.setItem(
+    getCompletedKey(dayIndex),
+    JSON.stringify({
+      completed: true,
+      moves
+    })
+  );
+}
+
+function loadCompletedPuzzleState(dayIndex) {
+  const raw = localStorage.getItem(getCompletedKey(dayIndex));
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("Failed to parse completed puzzle state:", err);
+    localStorage.removeItem(getCompletedKey(dayIndex));
+    return null;
+  }
+}
+
+function saveCurrentPuzzleProgress() {
+  if (!currentData || showWin) return;
+
+  const key = getProgressKey(selectedDay);
+
+  const placedPieces = pieces
+    .filter(p => p.placed)
+    .map(p => ({
+      label: p.label,
+      gridX: p.gridX,
+      gridY: p.gridY
+    }));
+
+  localStorage.setItem(
+    key,
+    JSON.stringify({
+      moves: moveCount,
+      placedPieces
+    })
+  );
+}
+
+function clearCurrentPuzzleProgress(dayIndex = selectedDay) {
+  localStorage.removeItem(getProgressKey(dayIndex));
+}
+
+function applySavedPuzzleProgress(dayIndex) {
+  const raw = localStorage.getItem(getProgressKey(dayIndex));
+  if (!raw) return false;
+
+  try {
+    const data = JSON.parse(raw);
+    const placedMap = new Map((data.placedPieces || []).map(p => [p.label, p]));
+
+    moveCount = Number.isInteger(data.moves) ? data.moves : 0;
+
+    pieces.forEach(piece => {
+      const saved = placedMap.get(piece.label);
+
+      if (saved) {
+        piece.placed = true;
+        piece.gridX = saved.gridX;
+        piece.gridY = saved.gridY;
+        piece.x = saved.gridX * cellSize;
+        piece.y = saved.gridY * cellSize;
+      } else {
+        piece.placed = false;
+        piece.gridX = 0;
+        piece.gridY = 0;
+        piece.x = piece.trayX;
+        piece.y = piece.trayY;
+      }
+    });
+
+    return true;
+  } catch (err) {
+    console.error("Failed to restore puzzle progress:", err);
+    localStorage.removeItem(getProgressKey(dayIndex));
+    return false;
+  }
+}
+
+function saveViewedDay(dayIndex) {
+  sessionStorage.setItem(getViewedDayStorageKey(), String(dayIndex));
+}
+
+function getSavedViewedDay() {
+  const saved = sessionStorage.getItem(getViewedDayStorageKey());
+  if (saved === null) return null;
+
+  const parsed = parseInt(saved, 10);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 // -----------------------------
-// SHARE TEXT
+// STREAK HELPERS
 // -----------------------------
+function loadStreak() {
+  streakCurrent = parseInt(localStorage.getItem(getStreakCurrentStorageKey())) || 0;
+  streakBest = parseInt(localStorage.getItem(getStreakBestStorageKey())) || 0;
+  lastCompletedDate = localStorage.getItem(getLastCompletedDateStorageKey());
+
+  updateStreakDisplay();
+}
+
+function updateStreakDisplay() {
+  const el = document.getElementById("streakDisplay");
+  if (el) el.textContent = `🔥 ${streakCurrent}`;
+}
+
+function applyTodayPuzzleCompletionToStreak() {
+  const realTodayKey = getTodayKey();
+  const realYesterdayKey = getYesterdayKey();
+  const todayPuzzleIndex = getDailyIndex();
+
+  if (selectedDay !== todayPuzzleIndex) return;
+
+  if (lastCompletedDate === realTodayKey) {
+    return;
+  } else if (lastCompletedDate === realYesterdayKey) {
+    streakCurrent++;
+  } else {
+    streakCurrent = 1;
+  }
+
+  if (streakCurrent > streakBest) {
+    streakBest = streakCurrent;
+  }
+
+  lastCompletedDate = realTodayKey;
+
+  localStorage.setItem(getStreakCurrentStorageKey(), streakCurrent);
+  localStorage.setItem(getStreakBestStorageKey(), streakBest);
+  localStorage.setItem(getLastCompletedDateStorageKey(), lastCompletedDate);
+
+  updateStreakDisplay();
+}
+
+// -----------------------------
+// SHARE / WIN TEXT
+// -----------------------------
+function buildShareGridText(cells, separator = "\n") {
+  let minX = Math.min(...cells.map(c => c[0]));
+  let maxX = Math.max(...cells.map(c => c[0]));
+  let minY = Math.min(...cells.map(c => c[1]));
+  let maxY = Math.max(...cells.map(c => c[1]));
+
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+
+  const grid = Array.from({ length: height }, () => Array(width).fill("⬜"));
+
+  cells.forEach(([x, y]) => {
+    const gx = x - minX;
+    const gy = y - minY;
+
+    if (grid[gy] && grid[gy][gx] !== undefined) {
+      grid[gy][gx] = "🟩";
+    }
+  });
+
+  return grid.map(row => row.join("")).join(separator);
+}
+
 function getShareText() {
   try {
     if (!currentData || !currentData.filled_cells?.length) {
       return `Puzzle ${selectedDay}\nMoves: ${moveCount}`;
     }
 
-    const cells = currentData.filled_cells;
-
-    let minX = Math.min(...cells.map(c => c[0]));
-    let maxX = Math.max(...cells.map(c => c[0]));
-    let minY = Math.min(...cells.map(c => c[1]));
-    let maxY = Math.max(...cells.map(c => c[1]));
-
-    const width = maxX - minX + 1;
-    const height = maxY - minY + 1;
-
-    let grid = Array.from({ length: height }, () =>
-      Array(width).fill("⬜")
-    );
-
-    cells.forEach(([x, y]) => {
-      const gx = x - minX;
-      const gy = y - minY;
-
-      if (grid[gy] && grid[gy][gx] !== undefined) {
-        grid[gy][gx] = "🟩";
-      }
-    });
-
-    const gridLines = grid.map(row => row.join("")).join("\n");
-
-    const puzzleDate = getPuzzleDate(selectedDay);
-
-    const dateStr = puzzleDate.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric"
-    });
+    const gridLines = buildShareGridText(currentData.filled_cells, "\n");
+    const dateStr = formatPuzzleDate(selectedDay, "short");
 
     return `${dateStr}
 Moves: ${moveCount}
@@ -183,7 +370,6 @@ ${streakCurrent} Day Streak!`;
   }
 }
 
-// -----------------------------
 function copyResult() {
   const text = getShareText();
   navigator.clipboard.writeText(text);
@@ -199,58 +385,30 @@ function copyResult() {
   }, 1500);
 }
 
-function easeOutCubic(t) {
-  return 1 - Math.pow(1 - t, 3);
-}
+function getWinPreviewHTML() {
+  const isTodayPuzzle = selectedDay === getDailyIndex();
 
-function startWinSequence() {
-  winAnimationActive = true;
-  winAnimationProgress = 0;
-
-  const start = performance.now();
-
-  function step(now) {
-    const elapsed = now - start;
-    const t = Math.min(1, elapsed / WIN_ANIMATION_DURATION);
-
-    winAnimationProgress = easeOutCubic(t);
-    render();
-
-    if (t < 1) {
-      requestAnimationFrame(step);
-    } else {
-      winAnimationActive = false;
-      winAnimationProgress = 1;
-
-      pieces = [];
-      showWin = true;
-      render();
-
-      setTimeout(() => {
-        showWinOverlay();
-      }, WIN_OVERLAY_DELAY);
-    }
+  if (!currentData || !currentData.filled_cells?.length) {
+    return `
+      <div class="winDate">Puzzle ${selectedDay}</div>
+      <div class="winMovesPreview">Moves: ${moveCount}</div>
+      ${isTodayPuzzle ? `<div class="winStreakPreview">${streakCurrent} Day Streak!</div>` : ""}
+    `;
   }
 
-  requestAnimationFrame(step);
+  const gridLines = buildShareGridText(currentData.filled_cells, "<br>");
+  const dateStr = formatPuzzleDate(selectedDay, "short");
+
+  return `
+    <div class="winDate">${dateStr}</div>
+    <div class="winMovesPreview">Moves: ${moveCount}</div>
+    ${isTodayPuzzle ? `<div class="winStreakPreview">${streakCurrent} Day Streak!</div>` : ""}
+    <div class="winGridPreview">${gridLines}</div>
+  `;
 }
 
-function drawWinFillOverlay() {
-  if (!winAnimationActive && !showWin) return;
-
-  const alpha = winAnimationActive ? winAnimationProgress : 1;
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = "#4CAF50";
-
-  currentData.filled_cells.forEach(([x, y]) => {
-    ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-  });
-
-  ctx.restore();
-}
-
+// -----------------------------
+// OVERLAYS / UI
 // -----------------------------
 function showWinOverlay() {
   const winSharePreview = document.getElementById("winSharePreview");
@@ -275,153 +433,89 @@ function closeWinOverlay() {
   document.getElementById("winOverlay").classList.remove("active");
 }
 
-function getWinPreviewHTML() {
-  const isTodayPuzzle = selectedDay === getDailyIndex();
+function getSelectedPuzzleDateString() {
+  return formatPuzzleDate(selectedDay, "long");
+}
 
-  if (!currentData || !currentData.filled_cells?.length) {
-    return `
-      <div class="winDate">Puzzle ${selectedDay}</div>
-      <div class="winMovesPreview">Moves: ${moveCount}</div>
-      ${isTodayPuzzle ? `<div class="winStreakPreview">${streakCurrent} Day Streak!</div>` : ""}
-    `;
-  }
+function openBeginOverlay() {
+  if (getLayoutMode() !== "phone") return;
 
-  const cells = currentData.filled_cells;
+  const overlay = document.getElementById("beginOverlay");
+  const dateEl = document.getElementById("beginDate");
+  if (!overlay || !dateEl) return;
 
-  let minX = Math.min(...cells.map(c => c[0]));
-  let maxX = Math.max(...cells.map(c => c[0]));
-  let minY = Math.min(...cells.map(c => c[1]));
-  let maxY = Math.max(...cells.map(c => c[1]));
+  dateEl.textContent = getSelectedPuzzleDateString();
+  overlay.classList.add("active");
+  showBeginOverlay = true;
+}
 
-  const width = maxX - minX + 1;
-  const height = maxY - minY + 1;
+function closeBeginOverlay() {
+  const overlay = document.getElementById("beginOverlay");
+  if (overlay) overlay.classList.remove("active");
+  showBeginOverlay = false;
+}
 
-  let grid = Array.from({ length: height }, () =>
-    Array(width).fill("⬜")
-  );
+function openSupportOverlay() {
+  document.getElementById("supportOverlay").classList.add("active");
+}
 
-  cells.forEach(([x, y]) => {
-    const gx = x - minX;
-    const gy = y - minY;
-
-    if (grid[gy] && grid[gy][gx] !== undefined) {
-      grid[gy][gx] = "🟩";
-    }
-  });
-
-  const gridLines = grid.map(row => row.join("")).join("<br>");
-  const puzzleDate = getPuzzleDate(selectedDay);
-
-  const dateStr = puzzleDate.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric"
-  });
-
-  return `
-    <div class="winDate">${dateStr}</div>
-    <div class="winMovesPreview">Moves: ${moveCount}</div>
-    ${isTodayPuzzle ? `<div class="winStreakPreview">${streakCurrent} Day Streak!</div>` : ""}
-    <div class="winGridPreview">${gridLines}</div>
-  `;
+function closeSupportOverlay() {
+  document.getElementById("supportOverlay").classList.remove("active");
 }
 
 // -----------------------------
-// DAILY SYSTEM
+// THEME / LABELS
 // -----------------------------
-function getDailyIndex() {
-  const startDate = new Date("2024-01-01");
-  const today = new Date();
-
-  startDate.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-
-  return Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+function toggleLabels() {
+  labelsEnabled = !labelsEnabled;
+  localStorage.setItem(getLabelsStorageKey(), labelsEnabled ? "on" : "off");
+  updateLabelsButton();
+  render();
 }
 
-function isCompleted(dayIndex) {
-  return localStorage.getItem("puzzle_" + getDateKey(dayIndex)) !== null;
+function applySavedLabels() {
+  labelsEnabled = localStorage.getItem(getLabelsStorageKey()) === "on";
+  updateLabelsButton();
 }
 
-// -----------------------------
-// LOAD PUZZLE
-// -----------------------------
-async function loadPuzzle(dayIndex) {
-  selectedDay = dayIndex;
-  saveViewedDay(dayIndex);
+function updateLabelsButton() {
+  const btn = document.getElementById("labelsBtn");
+  if (!btn) return;
 
-  const puzzleIndex = dayIndex - getCalendarStartIndex();
+  btn.textContent = "#";
+  btn.style.opacity = labelsEnabled ? "1" : "0.6";
+}
 
-  if (puzzleIndex < 0 || puzzleIndex >= puzzleFiles.length) {
-    console.error("No puzzle assigned for this date:", dayIndex);
-    currentData = getFallbackPuzzle();
+function toggleTheme() {
+  document.body.classList.toggle("dark");
+
+  const isDark = document.body.classList.contains("dark");
+  localStorage.setItem(getThemeStorageKey(), isDark ? "dark" : "light");
+
+  const btn = document.getElementById("themeBtn");
+  btn.textContent = isDark ? "☀️" : "🌙";
+
+  render();
+}
+
+function applySavedTheme() {
+  const savedTheme = localStorage.getItem(getThemeStorageKey());
+
+  if (savedTheme === "dark") {
+    document.body.classList.add("dark");
   } else {
-    const file = puzzleFiles[puzzleIndex];
-
-    try {
-      const res = await fetch(file);
-      if (!res.ok) throw new Error("Bad JSON");
- 
-      currentData = await res.json();
-
-      if (!isValidPuzzleData(currentData)) {
-        throw new Error("Puzzle JSON missing required fields");
-      }
-    } catch (err) {
-      console.error("Failed to load puzzle:", file, err);
-      currentData = getFallbackPuzzle();
-    }
+    document.body.classList.remove("dark");
   }
 
-  const file = puzzleFiles[puzzleIndex];
-
-  try {
-    const res = await fetch(file);
-    if (!res.ok) throw new Error("Bad JSON");
-
-    currentData = await res.json();
-
-    if (!isValidPuzzleData(currentData)) {
-      throw new Error("Puzzle JSON missing required fields");
-    }
-  } catch (err) {
-    console.error("Failed to load puzzle:", file, err);
-    currentData = getFallbackPuzzle();
-  }
-
-  generateShapeColors();
-
-  moveCount = 0;
-  showWin = false;
-  pieces = [];
-  winAnimationActive = false;
-  winAnimationProgress = 0;
-
-  const key = "puzzle_" + getDateKey(dayIndex);
-  const saved = localStorage.getItem(key);
-
-  if (saved) {
-    const data = JSON.parse(saved);
-    showWin = true;
-    moveCount = data.moves;
-    pieces = [];
-	clearCurrentPuzzleProgress(dayIndex);
-  }
-
-  document.getElementById("winOverlay").classList.remove("active");
-  closeBeginOverlay();
-
-  resizeCanvas(true);
-  buildCalendar();
-  if (!showWin) {
-    applySavedPuzzleProgress(dayIndex);
-    render();
-  }
-  if (getLayoutMode() === "phone") {
-    openBeginOverlay();
+  const btn = document.getElementById("themeBtn");
+  if (btn) {
+    btn.textContent = document.body.classList.contains("dark") ? "☀️" : "🌙";
   }
 }
 
+// -----------------------------
+// PUZZLE LOADING
+// -----------------------------
 function getFallbackPuzzle() {
   return {
     grid_width: 5,
@@ -431,15 +525,83 @@ function getFallbackPuzzle() {
   };
 }
 
+async function fetchPuzzleDataForDay(dayIndex) {
+  const puzzleIndex = dayIndex - getCalendarStartIndex();
+
+  if (puzzleIndex < 0 || puzzleIndex >= puzzleFiles.length) {
+    console.error("No puzzle assigned for this date:", dayIndex);
+    return getFallbackPuzzle();
+  }
+
+  const file = puzzleFiles[puzzleIndex];
+
+  try {
+    const res = await fetch(file);
+    if (!res.ok) throw new Error("Bad JSON");
+
+    const data = await res.json();
+
+    if (!isValidPuzzleData(data)) {
+      throw new Error("Puzzle JSON missing required fields");
+    }
+
+    return data;
+  } catch (err) {
+    console.error("Failed to load puzzle:", file, err);
+    return getFallbackPuzzle();
+  }
+}
+
+function resetPuzzleRuntimeState() {
+  moveCount = 0;
+  showWin = false;
+  pieces = [];
+  winAnimationActive = false;
+  winAnimationProgress = 0;
+}
+
+function applyCompletedState(dayIndex) {
+  const saved = loadCompletedPuzzleState(dayIndex);
+  if (!saved) return;
+
+  showWin = true;
+  moveCount = saved.moves;
+  pieces = [];
+  clearCurrentPuzzleProgress(dayIndex);
+}
+
+async function loadPuzzle(dayIndex) {
+  selectedDay = dayIndex;
+  saveViewedDay(dayIndex);
+
+  currentData = await fetchPuzzleDataForDay(dayIndex);
+  generateShapeColors();
+
+  resetPuzzleRuntimeState();
+  applyCompletedState(dayIndex);
+
+  document.getElementById("winOverlay").classList.remove("active");
+  closeBeginOverlay();
+
+  resizeCanvas(true);
+  buildCalendar();
+
+  if (!showWin) {
+    applySavedPuzzleProgress(dayIndex);
+    render();
+  }
+
+  if (getLayoutMode() === "phone") {
+    openBeginOverlay();
+  }
+}
+
 // -----------------------------
 // CALENDAR
 // -----------------------------
 function changeMonth(delta) {
   const todayIndex = getDailyIndex();
-  const startDate = new Date("2024-01-01");
-
-  const todayDate = new Date(startDate);
-  todayDate.setDate(startDate.getDate() + todayIndex);
+  const todayDate = getPuzzleDate(todayIndex);
 
   const currentView = new Date(todayDate);
   currentView.setMonth(currentView.getMonth() + calendarOffset);
@@ -454,9 +616,7 @@ function changeMonth(delta) {
   );
 
   const lastPuzzleIndex = Math.min(getDailyIndex(), getLastAvailablePuzzleIndex());
-  const lastPuzzleDate = new Date(startDate);
-  lastPuzzleDate.setDate(startDate.getDate() + lastPuzzleIndex);
-
+  const lastPuzzleDate = getPuzzleDate(lastPuzzleIndex);
   const maxMonth = new Date(lastPuzzleDate.getFullYear(), lastPuzzleDate.getMonth(), 1);
   const nextMonthOnly = new Date(nextView.getFullYear(), nextView.getMonth(), 1);
 
@@ -474,12 +634,10 @@ function buildCalendar() {
   grid.innerHTML = "";
 
   const todayIndex = getDailyIndex();
-  const startDate = new Date("2024-01-01");
   const minIndex = getCalendarStartIndex();
   const maxPuzzleIndex = getLastAvailablePuzzleIndex();
-  
-  const baseDate = new Date(startDate);
-  baseDate.setDate(startDate.getDate() + todayIndex);
+
+  const baseDate = getPuzzleDate(todayIndex);
   baseDate.setMonth(baseDate.getMonth() + calendarOffset);
 
   title.textContent = baseDate.toLocaleDateString(undefined, {
@@ -510,7 +668,7 @@ function buildCalendar() {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(baseDate.getFullYear(), baseDate.getMonth(), d);
-    const dayIndex = Math.floor((date - startDate) / (1000 * 60 * 60 * 24));
+    const dayIndex = getDayIndexFromDate(date);
 
     const btn = document.createElement("div");
     btn.className = "calendar-day";
@@ -545,112 +703,12 @@ async function goToToday() {
   toggleCalendar();
 }
 
-// -----------------------------
 function toggleCalendar() {
   document.getElementById("calendar").classList.toggle("hidden");
 }
 
-function saveViewedDay(dayIndex) {
-  sessionStorage.setItem("viewed_day", String(dayIndex));
-}
-
-function getSavedViewedDay() {
-  const saved = sessionStorage.getItem("viewed_day");
-  if (saved === null) return null;
-
-  const parsed = parseInt(saved, 10);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-function toggleLabels() {
-  labelsEnabled = !labelsEnabled;
-  localStorage.setItem("piece_labels", labelsEnabled ? "on" : "off");
-  updateLabelsButton();
-  render();
-}
-
-function applySavedLabels() {
-  labelsEnabled = localStorage.getItem("piece_labels") === "on";
-  updateLabelsButton();
-}
-
-function updateLabelsButton() {
-  const btn = document.getElementById("labelsBtn");
-  if (!btn) return;
-
-  btn.textContent = "#";
-  btn.style.opacity = labelsEnabled ? "1" : "0.6";
-}
-
 // -----------------------------
-function toggleTheme() {
-  document.body.classList.toggle("dark");
-
-  const isDark = document.body.classList.contains("dark");
-  localStorage.setItem("theme", isDark ? "dark" : "light");
-
-  const btn = document.getElementById("themeBtn");
-  btn.textContent = isDark ? "☀️" : "🌙";
-
-  render();
-}
-
-function applySavedTheme() {
-  const savedTheme = localStorage.getItem("theme");
-
-  if (savedTheme === "dark") {
-    document.body.classList.add("dark");
-  } else {
-    document.body.classList.remove("dark");
-  }
-
-  const btn = document.getElementById("themeBtn");
-  if (btn) {
-    btn.textContent = document.body.classList.contains("dark") ? "☀️" : "🌙";
-  }
-}
-
-// -----------------------------
-// Support UI Functions
-// -----------------------------
-function openSupportOverlay() {
-  document.getElementById("supportOverlay").classList.add("active");
-}
-
-function closeSupportOverlay() {
-  document.getElementById("supportOverlay").classList.remove("active");
-}
-
-function getSelectedPuzzleDateString() {
-  const puzzleDate = getPuzzleDate(selectedDay);
-
-  return puzzleDate.toLocaleDateString(undefined, {
-    month: "long",
-    day: "numeric",
-    year: "numeric"
-  });
-}
-
-function openBeginOverlay() {
-  if (getLayoutMode() !== "phone") return;
-
-  const overlay = document.getElementById("beginOverlay");
-  const dateEl = document.getElementById("beginDate");
-  if (!overlay || !dateEl) return;
-
-  dateEl.textContent = getSelectedPuzzleDateString();
-  overlay.classList.add("active");
-  showBeginOverlay = true;
-}
-
-function closeBeginOverlay() {
-  const overlay = document.getElementById("beginOverlay");
-  if (overlay) overlay.classList.remove("active");
-  showBeginOverlay = false;
-}
-
-// -----------------------------
-// Input / Layout Helpers
+// LAYOUT HELPERS
 // -----------------------------
 function isTouchInput() {
   return window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
@@ -674,6 +732,18 @@ function isTabletLayout() {
 
 function isMobileLayout() {
   return isPhoneLayout();
+}
+
+function getPhoneCellSize() {
+  if (!currentData) return 38;
+
+  const layoutSideMargin = 16;
+  const availableWidth = window.innerWidth - layoutSideMargin * 2 - 20;
+  const maxBoardWidthCells = currentData.grid_width;
+
+  const fitted = Math.floor(availableWidth / maxBoardWidthCells);
+
+  return Math.max(24, Math.min(38, fitted));
 }
 
 function getLayoutConfig() {
@@ -750,18 +820,6 @@ function getLayoutConfig() {
   };
 }
 
-function getPhoneCellSize() {
-  if (!currentData) return 38;
-
-  const layoutSideMargin = 16;
-  const availableWidth = window.innerWidth - layoutSideMargin * 2 - 20; // extra safety padding
-  const maxBoardWidthCells = currentData.grid_width;
-
-  const fitted = Math.floor(availableWidth / maxBoardWidthCells);
-
-  return Math.max(24, Math.min(38, fitted));
-}
-
 function isPhoneTrayMode() {
   return getLayoutMode() === "phone";
 }
@@ -796,7 +854,10 @@ function pointInTray(screenX, screenY) {
   );
 }
 
-// -----------------------------
+function getOrientation() {
+  return window.innerWidth > window.innerHeight ? "landscape" : "portrait";
+}
+
 function resizeCanvas(forceRebuild = false) {
   const layout = getLayoutConfig();
   const nextMode = layout.mode;
@@ -810,8 +871,6 @@ function resizeCanvas(forceRebuild = false) {
   cellSize = layout.cellSize;
 
   canvas.width = nextWidth;
-
-  // Keep canvas tall enough for existing tray space
   canvas.height = Math.max(nextHeight, canvas.height || 0);
 
   if (
@@ -828,12 +887,10 @@ function resizeCanvas(forceRebuild = false) {
   lastOrientation = nextOrientation;
 }
 
-function getOrientation() {
-  return window.innerWidth > window.innerHeight ? "landscape" : "portrait";
-}
-
 window.addEventListener("resize", resizeCanvas);
 
+// -----------------------------
+// PUZZLE COLOR / SHAPE HELPERS
 // -----------------------------
 function generateShapeColors() {
   const palettes = [
@@ -926,15 +983,9 @@ function generateShapeColors() {
   ];
 
   const palette = palettes[selectedDay % palettes.length];
-
-  shapeColors = currentData.shapes.map((_, i) =>
-    palette[i % palette.length]
-  );
+  shapeColors = currentData.shapes.map((_, i) => palette[i % palette.length]);
 }
 
-// -----------------------------
-// SHAPE HELPERS
-// -----------------------------
 function normalize(shape) {
   let minX = Math.min(...shape.map(c => c[0]));
   let minY = Math.min(...shape.map(c => c[1]));
@@ -954,25 +1005,28 @@ function getShapeSize(shape) {
 }
 
 // -----------------------------
-// BETTER TRAY SYSTEM
+// PIECE LAYOUT
 // -----------------------------
 function createPieces() {
-	const previousPieces = new Map(
-		pieces.map(p => [p.label, {
-		  placed: p.placed,
-		  x: p.x,
-		  y: p.y,
-		  gridX: p.gridX,
-		  gridY: p.gridY
-		}])
-	);
+  const previousPieces = new Map(
+    pieces.map(p => [
+      p.label,
+      {
+        placed: p.placed,
+        x: p.x,
+        y: p.y,
+        gridX: p.gridX,
+        gridY: p.gridY
+      }
+    ])
+  );
+
   pieces = [];
 
   const layout = getLayoutConfig();
-
   const boardWidth = currentData.grid_width * cellSize;
   const boardHeight = currentData.grid_height * cellSize;
-  
+
   const sideMargin = layout.sideMargin;
   const trayGap = layout.trayGap;
   const spacing = layout.pieceSpacing;
@@ -981,7 +1035,7 @@ function createPieces() {
 
   gameOffsetX = Math.floor((canvas.width - boardWidth) / 2);
   gameOffsetY = topMargin;
-  
+
   if (isPhoneTrayMode()) {
     trayViewport = getPhoneTrayMetrics(boardWidth, boardHeight);
   } else {
@@ -997,10 +1051,7 @@ function createPieces() {
   const bottomAvailableWidth = Math.max(0, bottomAvailableRight - bottomAvailableLeft);
 
   const boardCenterX = boardWidth / 2;
-  const bottomTrayWidth = Math.min(
-    bottomAvailableWidth,
-    boardWidth + layout.bottomTrayExtraWidth
-  );
+  const bottomTrayWidth = Math.min(bottomAvailableWidth, boardWidth + layout.bottomTrayExtraWidth);
 
   let bottomTrayLeft = boardCenterX - bottomTrayWidth / 2;
   bottomTrayLeft = Math.max(bottomAvailableLeft, bottomTrayLeft);
@@ -1047,13 +1098,8 @@ function createPieces() {
         (trayViewport.y - gameOffsetY) + trayViewport.height
       );
     } else {
-      const fitsLeft =
-        width <= leftTrayWidth &&
-        leftCursorY + height <= sideTrayHeight;
-
-      const fitsRight =
-        width <= rightTrayWidth &&
-        rightCursorY + height <= sideTrayHeight;
+      const fitsLeft = width <= leftTrayWidth && leftCursorY + height <= sideTrayHeight;
+      const fitsRight = width <= rightTrayWidth && rightCursorY + height <= sideTrayHeight;
 
       if (fitsLeft && (!fitsRight || leftCursorY <= rightCursorY)) {
         x = leftTrayRight - width;
@@ -1080,37 +1126,36 @@ function createPieces() {
     }
 
     const label = i + 1;
-	const prev = previousPieces.get(label);
+    const prev = previousPieces.get(label);
 
-	const piece = {
-	  cells,
-	  x,
-	  y,
-	  trayX: x,
-	  trayY: y,
-	  placed: false,
-	  gridX: 0,
-	  gridY: 0,
-	  color: shapeColors[i],
-	  label
-	};
+    const piece = {
+      cells,
+      x,
+      y,
+      trayX: x,
+      trayY: y,
+      placed: false,
+      gridX: 0,
+      gridY: 0,
+      color: shapeColors[i],
+      label
+    };
 
-	if (prev) {
-	  piece.placed = prev.placed;
-	  piece.gridX = prev.gridX;
-	  piece.gridY = prev.gridY;
+    if (prev) {
+      piece.placed = prev.placed;
+      piece.gridX = prev.gridX;
+      piece.gridY = prev.gridY;
 
-	  if (prev.placed) {
-		piece.x = prev.gridX * cellSize;
-		piece.y = prev.gridY * cellSize;
-	  } else {
-		piece.x = piece.trayX;
-		piece.y = piece.trayY;
-	  }
-	}
+      if (prev.placed) {
+        piece.x = prev.gridX * cellSize;
+        piece.y = prev.gridY * cellSize;
+      } else {
+        piece.x = piece.trayX;
+        piece.y = piece.trayY;
+      }
+    }
 
-	pieces.push(piece);
-
+    pieces.push(piece);
     lowestBottomEdge = Math.max(lowestBottomEdge, y + height);
   });
 
@@ -1127,72 +1172,71 @@ function createPieces() {
 }
 
 // -----------------------------
-function render() {
-  if (!currentData) return;
+// RENDERING
+// -----------------------------
+function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
 
-  const layout = getLayoutConfig();
+function startWinSequence() {
+  winAnimationActive = true;
+  winAnimationProgress = 0;
 
-  const boardWidth = currentData.grid_width * cellSize;
-  const boardHeight = currentData.grid_height * cellSize;
+  const start = performance.now();
 
-  gameOffsetX = Math.floor((canvas.width - boardWidth) / 2);
-  gameOffsetY = layout.topMargin;
+  function step(now) {
+    const elapsed = now - start;
+    const t = Math.min(1, elapsed / WIN_ANIMATION_DURATION);
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+    winAnimationProgress = easeOutCubic(t);
+    render();
+
+    if (t < 1) {
+      requestAnimationFrame(step);
+    } else {
+      winAnimationActive = false;
+      winAnimationProgress = 1;
+
+      pieces = [];
+      showWin = true;
+      render();
+
+      setTimeout(() => {
+        showWinOverlay();
+      }, WIN_OVERLAY_DELAY);
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+
+function drawWinFillOverlay() {
+  if (!winAnimationActive && !showWin) return;
+
+  const alpha = winAnimationActive ? winAnimationProgress : 1;
 
   ctx.save();
-  ctx.translate(gameOffsetX, gameOffsetY);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "#4CAF50";
 
-  ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.25)";
-  ctx.shadowBlur = 25;
-  ctx.shadowOffsetY = 8;
-
-  ctx.fillStyle = getCSS("--grid-bg");
-  ctx.beginPath();
-  ctx.roundRect(
-    -10,
-    -10,
-    currentData.grid_width * cellSize + 20,
-    currentData.grid_height * cellSize + 20,
-    12
-  );
-  ctx.fill();
-  ctx.restore();
-
-  drawGrid();
-  drawPieces();
-  drawWinFillOverlay();
-
-  ctx.restore();
-
-  const puzzleDate = getPuzzleDate(selectedDay);
-
-  const dateStr = puzzleDate.toLocaleDateString(undefined, {
-    month: "long",
-    day: "numeric",
-    year: "numeric"
+  currentData.filled_cells.forEach(([x, y]) => {
+    ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
   });
 
-	ctx.fillStyle = getCSS("--text");
-	ctx.textAlign = "center";
+  ctx.restore();
+}
 
-	if (layout.mode !== "phone") {
-	  ctx.font = layout.dateFont;
-	  ctx.fillText(dateStr, canvas.width / 2, gameOffsetY + layout.dateY);
-
-	  ctx.font = layout.movesFont;
-	  ctx.fillText(`Moves: ${moveCount}`, canvas.width / 2, gameOffsetY + layout.movesY);
-	}
+function drawGrid() {
+  currentData.filled_cells.forEach(([x, y]) => {
+    ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
+  });
 }
 
 function getLabelAnchor(piece) {
-  const cellCenters = piece.cells.map(([cx, cy]) => {
-    return {
-      x: piece.x + cx * cellSize + cellSize / 2,
-      y: piece.y + cy * cellSize + cellSize / 2
-    };
-  });
+  const cellCenters = piece.cells.map(([cx, cy]) => ({
+    x: piece.x + cx * cellSize + cellSize / 2,
+    y: piece.y + cy * cellSize + cellSize / 2
+  }));
 
   const avgX = cellCenters.reduce((sum, c) => sum + c.x, 0) / cellCenters.length;
   const avgY = cellCenters.reduce((sum, c) => sum + c.y, 0) / cellCenters.length;
@@ -1214,21 +1258,10 @@ function getLabelAnchor(piece) {
   return best;
 }
 
-function getLabelTextColor(hex) {
-  const clean = hex.replace("#", "");
-  const r = parseInt(clean.substring(0, 2), 16);
-  const g = parseInt(clean.substring(2, 4), 16);
-  const b = parseInt(clean.substring(4, 6), 16);
-
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? "#111" : "#fff";
-}
-
 function drawPieceLabel(piece) {
   const layout = getLayoutConfig();
   const anchor = getLabelAnchor(piece);
   const text = String(piece.label);
-
   const radius = layout.labelRadius;
 
   ctx.save();
@@ -1250,11 +1283,36 @@ function drawPieceLabel(piece) {
   ctx.restore();
 }
 
-// -----------------------------
-function drawGrid() {
-  currentData.filled_cells.forEach(([x, y]) => {
-    ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
+function drawDraggingPiece() {
+  if (!draggingPiece) return;
+
+  ctx.globalAlpha = 0.4;
+  ctx.fillStyle = ghostValid ? "green" : "red";
+
+  draggingPiece.cells.forEach(cell => {
+    ctx.fillRect(
+      ghostGX * cellSize + cell[0] * cellSize,
+      ghostGY * cellSize + cell[1] * cellSize,
+      cellSize,
+      cellSize
+    );
   });
+
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = draggingPiece.color;
+
+  draggingPiece.cells.forEach(cell => {
+    ctx.fillRect(
+      draggingPiece.x + cell[0] * cellSize,
+      draggingPiece.y + cell[1] * cellSize,
+      cellSize,
+      cellSize
+    );
+  });
+
+  if (labelsEnabled) {
+    drawPieceLabel(draggingPiece);
+  }
 }
 
 function drawPieces() {
@@ -1277,7 +1335,6 @@ function drawPieces() {
     ctx.restore();
   }
 
-  // Draw all non-dragging pieces first
   pieces.forEach(p => {
     if (p === draggingPiece) return;
 
@@ -1323,36 +1380,120 @@ function drawPieces() {
     }
   });
 
-  // Draw dragging piece last, never clipped to tray
-  if (draggingPiece) {
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = ghostValid ? "green" : "red";
+  drawDraggingPiece();
+}
 
-    draggingPiece.cells.forEach(cell => {
-      ctx.fillRect(
-        ghostGX * cellSize + cell[0] * cellSize,
-        ghostGY * cellSize + cell[1] * cellSize,
-        cellSize,
-        cellSize
-      );
-    });
+function render() {
+  if (!currentData) return;
 
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = draggingPiece.color;
+  const layout = getLayoutConfig();
 
-    draggingPiece.cells.forEach(cell => {
-      ctx.fillRect(
-        draggingPiece.x + cell[0] * cellSize,
-        draggingPiece.y + cell[1] * cellSize,
-        cellSize,
-        cellSize
-      );
-    });
+  const boardWidth = currentData.grid_width * cellSize;
+  const boardHeight = currentData.grid_height * cellSize;
 
-    if (labelsEnabled) {
-      drawPieceLabel(draggingPiece);
+  gameOffsetX = Math.floor((canvas.width - boardWidth) / 2);
+  gameOffsetY = layout.topMargin;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(gameOffsetX, gameOffsetY);
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.25)";
+  ctx.shadowBlur = 25;
+  ctx.shadowOffsetY = 8;
+
+  ctx.fillStyle = getCSS("--grid-bg");
+  ctx.beginPath();
+  ctx.roundRect(
+    -10,
+    -10,
+    currentData.grid_width * cellSize + 20,
+    currentData.grid_height * cellSize + 20,
+    12
+  );
+  ctx.fill();
+  ctx.restore();
+
+  drawGrid();
+  drawPieces();
+  drawWinFillOverlay();
+
+  ctx.restore();
+
+  const dateStr = formatPuzzleDate(selectedDay, "long");
+
+  ctx.fillStyle = getCSS("--text");
+  ctx.textAlign = "center";
+
+  if (layout.mode !== "phone") {
+    ctx.font = layout.dateFont;
+    ctx.fillText(dateStr, canvas.width / 2, gameOffsetY + layout.dateY);
+
+    ctx.font = layout.movesFont;
+    ctx.fillText(`Moves: ${moveCount}`, canvas.width / 2, gameOffsetY + layout.movesY);
+  }
+}
+
+// -----------------------------
+// GAME RULE HELPERS
+// -----------------------------
+function placePiece(piece, gx, gy) {
+  piece.gridX = gx;
+  piece.gridY = gy;
+  piece.x = gx * cellSize;
+  piece.y = gy * cellSize;
+  piece.placed = true;
+  moveCount++;
+}
+
+function returnPieceToTray(piece) {
+  piece.placed = false;
+  piece.gridX = 0;
+  piece.gridY = 0;
+  piece.x = piece.trayX;
+  piece.y = piece.trayY;
+}
+
+function isSamePlacement(piece, gx, gy) {
+  return dragStartPlaced && dragStartGridX === gx && dragStartGridY === gy;
+}
+
+function checkWin() {
+  return pieces.every(p => p.placed);
+}
+
+function isFilled(x, y) {
+  return currentData.filled_cells.some(c => c[0] == x && c[1] == y);
+}
+
+function canPlace(piece, gx, gy) {
+  for (let cell of piece.cells) {
+    let x = gx + cell[0];
+    let y = gy + cell[1];
+
+    if (!isFilled(x, y)) return false;
+
+    for (let p of pieces) {
+      if (p !== piece && p.placed) {
+        for (let c of p.cells) {
+          if (p.gridX + c[0] == x && p.gridY + c[1] == y) {
+            return false;
+          }
+        }
+      }
     }
   }
+
+  return true;
+}
+
+function handlePuzzleCompletion() {
+  saveCompletedPuzzleState(selectedDay, moveCount);
+  clearCurrentPuzzleProgress(selectedDay);
+  applyTodayPuzzleCompletionToStreak();
+  startWinSequence();
 }
 
 // -----------------------------
@@ -1386,7 +1527,6 @@ function startPointer(screenX, screenY) {
         offsetX = pos.x - p.x;
         offsetY = pos.y - p.y;
 
-        // Save previous state so cancel/invalid drop can restore it
         dragStartPlaced = p.placed;
         dragStartX = p.x;
         dragStartY = p.y;
@@ -1423,77 +1563,6 @@ function movePointer(screenX, screenY) {
   render();
 }
 
-function endPointer() {
-  if (showWin || !draggingPiece) return;
-
-  const dropGX = Math.floor((draggingPiece.x + cellSize / 2) / cellSize);
-  const dropGY = Math.floor((draggingPiece.y + cellSize / 2) / cellSize);
-  const dropValid = canPlace(draggingPiece, dropGX, dropGY);
-
-  if (dropValid) {
-    if (isSamePlacement(draggingPiece, dropGX, dropGY)) {
-      restoreDraggedPiece();
-    } else {
-      placePiece(draggingPiece, dropGX, dropGY);
-      saveCurrentPuzzleProgress();
-    }
-
-    if (checkWin() && !showWin && !winAnimationActive) {
-      const key = "puzzle_" + getDateKey(selectedDay);
-
-      localStorage.setItem(key, JSON.stringify({
-        completed: true,
-        moves: moveCount
-      }));
-	  clearCurrentPuzzleProgress(selectedDay);
-
-      const realTodayKey = getTodayKey();
-      const realYesterdayKey = getYesterdayKey();
-      const todayPuzzleIndex = getDailyIndex();
-
-		// Only today's puzzle should affect the streak
-		if (selectedDay === todayPuzzleIndex) {
-		  if (lastCompletedDate === realTodayKey) {
-			// already counted today, do nothing
-		  } else if (lastCompletedDate === realYesterdayKey) {
-			streakCurrent++;
-		  } else {
-			streakCurrent = 1;
-		  }
-
-		  if (streakCurrent > streakBest) {
-			streakBest = streakCurrent;
-		  }
-	  
-		  lastCompletedDate = realTodayKey;
-
-		  localStorage.setItem("streak_current", streakCurrent);
-		  localStorage.setItem("streak_best", streakBest);
-		  localStorage.setItem("last_completed_date", lastCompletedDate);
-
-		  updateStreakDisplay();
-		}
-
-      updateStreakDisplay();
-      startWinSequence();
-    }
-  } else {
-    if (dragStartPlaced) {
-      returnPieceToTray(draggingPiece);
-      saveCurrentPuzzleProgress();
-    } else {
-      restoreDraggedPiece();
-    }
-  }
-
-  ghostValid = false;
-  ghostGX = 0;
-  ghostGY = 0;
-  draggingPiece = null;
-  pendingTouchPiece = null;
-  render();
-}
-
 function restoreDraggedPiece() {
   if (!draggingPiece) return;
 
@@ -1504,6 +1573,7 @@ function restoreDraggedPiece() {
     draggingPiece.x = dragStartX;
     draggingPiece.y = dragStartY;
   }
+
   draggingPiece.gridX = dragStartGridX;
   draggingPiece.gridY = dragStartGridY;
   draggingPiece.placed = dragStartPlaced;
@@ -1555,6 +1625,41 @@ function beginDraggingPiece(piece, startOffsetX, startOffsetY) {
 
   piece.x = dragStartX;
   piece.placed = false;
+}
+
+function endPointer() {
+  if (showWin || !draggingPiece) return;
+
+  const dropGX = Math.floor((draggingPiece.x + cellSize / 2) / cellSize);
+  const dropGY = Math.floor((draggingPiece.y + cellSize / 2) / cellSize);
+  const dropValid = canPlace(draggingPiece, dropGX, dropGY);
+
+  if (dropValid) {
+    if (isSamePlacement(draggingPiece, dropGX, dropGY)) {
+      restoreDraggedPiece();
+    } else {
+      placePiece(draggingPiece, dropGX, dropGY);
+      saveCurrentPuzzleProgress();
+    }
+
+    if (checkWin() && !showWin && !winAnimationActive) {
+      handlePuzzleCompletion();
+    }
+  } else {
+    if (dragStartPlaced) {
+      returnPieceToTray(draggingPiece);
+      saveCurrentPuzzleProgress();
+    } else {
+      restoreDraggedPiece();
+    }
+  }
+
+  ghostValid = false;
+  ghostGX = 0;
+  ghostGY = 0;
+  draggingPiece = null;
+  pendingTouchPiece = null;
+  render();
 }
 
 // -----------------------------
@@ -1615,7 +1720,6 @@ function onTouchMove(e) {
   const absTrayX = Math.abs(dxTray);
   const absTrayY = Math.abs(dyTray);
 
-  // Horizontal swipe should work anywhere in tray, even not on a piece
   if (isPhoneTrayMode() && traySwipeActive && !draggingPiece) {
     if (absTrayX > 6 && absTrayX > absTrayY) {
       trayScrollX = traySwipeStartScrollX - dxTray;
@@ -1626,7 +1730,6 @@ function onTouchMove(e) {
     }
   }
 
-  // Piece dragging
   if (!draggingPiece && pendingTouchPiece) {
     const dx = touch.clientX - pendingTouchStartClientX;
     const dy = touch.clientY - pendingTouchStartClientY;
@@ -1634,7 +1737,6 @@ function onTouchMove(e) {
     const absY = Math.abs(dy);
 
     if (isPhoneTrayMode() && traySwipeActive && !pendingTouchPiece.placed) {
-      // vertical / upward pull from tray starts drag
       if (absY > TOUCH_DRAG_THRESHOLD && absY >= absX) {
         beginDraggingPiece(
           pendingTouchPiece,
@@ -1661,7 +1763,7 @@ function onTouchMove(e) {
   }
 }
 
-function onTouchEnd(e) {
+function onTouchEnd() {
   if (draggingPiece) {
     endPointer();
   }
@@ -1688,46 +1790,8 @@ function onTouchCancel() {
 }
 
 // -----------------------------
-function placePiece(piece, gx, gy) {
-  piece.gridX = gx;
-  piece.gridY = gy;
-  piece.x = gx * cellSize;
-  piece.y = gy * cellSize;
-  piece.placed = true;
-  moveCount++;
-}
-
-function checkWin() {
-  return pieces.every(p => p.placed);
-}
-
+// GENERAL HELPERS
 // -----------------------------
-function canPlace(piece, gx, gy) {
-  for (let cell of piece.cells) {
-    let x = gx + cell[0];
-    let y = gy + cell[1];
-
-    if (!isFilled(x, y)) return false;
-
-    for (let p of pieces) {
-      if (p !== piece && p.placed) {
-        for (let c of p.cells) {
-          if (p.gridX + c[0] == x && p.gridY + c[1] == y) {
-            return false;
-          }
-        }
-      }
-    }
-  }
-
-  return true;
-}
-
-// -----------------------------
-function isFilled(x, y) {
-  return currentData.filled_cells.some(c => c[0] == x && c[1] == y);
-}
-
 function getCSS(v) {
   return getComputedStyle(document.body).getPropertyValue(v);
 }
@@ -1742,83 +1806,8 @@ function isValidPuzzleData(data) {
   );
 }
 
-function getProgressKey(dayIndex) {
-  return "puzzle_state_" + getDateKey(dayIndex);
-}
-
-function saveCurrentPuzzleProgress() {
-  if (!currentData || showWin) return;
-
-  const key = getProgressKey(selectedDay);
-
-  const placedPieces = pieces
-    .filter(p => p.placed)
-    .map(p => ({
-      label: p.label,
-      gridX: p.gridX,
-      gridY: p.gridY
-    }));
-
-  localStorage.setItem(key, JSON.stringify({
-    moves: moveCount,
-    placedPieces
-  }));
-}
-
-function clearCurrentPuzzleProgress(dayIndex = selectedDay) {
-  localStorage.removeItem(getProgressKey(dayIndex));
-}
-
-function applySavedPuzzleProgress(dayIndex) {
-  const raw = localStorage.getItem(getProgressKey(dayIndex));
-  if (!raw) return false;
-
-  try {
-    const data = JSON.parse(raw);
-    const placedMap = new Map(
-      (data.placedPieces || []).map(p => [p.label, p])
-    );
-
-    moveCount = Number.isInteger(data.moves) ? data.moves : 0;
-
-    pieces.forEach(piece => {
-      const saved = placedMap.get(piece.label);
-
-      if (saved) {
-        piece.placed = true;
-        piece.gridX = saved.gridX;
-        piece.gridY = saved.gridY;
-        piece.x = saved.gridX * cellSize;
-        piece.y = saved.gridY * cellSize;
-      } else {
-        piece.placed = false;
-        piece.gridX = 0;
-        piece.gridY = 0;
-        piece.x = piece.trayX;
-        piece.y = piece.trayY;
-      }
-    });
-
-    return true;
-  } catch (err) {
-    console.error("Failed to restore puzzle progress:", err);
-    localStorage.removeItem(getProgressKey(dayIndex));
-    return false;
-  }
-}
-
-function returnPieceToTray(piece) {
-  piece.placed = false;
-  piece.gridX = 0;
-  piece.gridY = 0;
-  piece.x = piece.trayX;
-  piece.y = piece.trayY;
-}
-
-function isSamePlacement(piece, gx, gy) {
-  return dragStartPlaced && dragStartGridX === gx && dragStartGridY === gy;
-}
-
+// -----------------------------
+// BOOT
 // -----------------------------
 (async () => {
   applySavedTheme();
@@ -1830,6 +1819,7 @@ function isSamePlacement(piece, gx, gy) {
 
   const minIndex = getCalendarStartIndex();
   const maxIndex = Math.min(todayIndex, getLastAvailablePuzzleIndex());
+
   selectedDay = Math.max(minIndex, Math.min(maxIndex, savedViewedDay ?? todayIndex));
   await loadPuzzle(selectedDay);
 })();
