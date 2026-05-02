@@ -84,7 +84,7 @@ function normalizeDate(date) {
 }
 
 function formatLocalDateKey(date) {
-  const d = normalizeDate(date);
+  const d = new Date(date);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -92,15 +92,21 @@ function formatLocalDateKey(date) {
 }
 
 function getPuzzleDate(dayIndex) {
-  const date = new Date(PUZZLE_EPOCH_DATE);
-  date.setDate(PUZZLE_EPOCH_DATE.getDate() + dayIndex);
-  return date;
+  return new Date(Date.UTC(2024, 0, 1 + dayIndex));
 }
 
 function getDayIndexFromDate(date) {
-  const base = normalizeDate(PUZZLE_EPOCH_DATE);
-  const target = normalizeDate(date);
-  return Math.floor((target - base) / (1000 * 60 * 60 * 24));
+  const d = new Date(date);
+
+  const targetUTC = Date.UTC(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate()
+  );
+
+  const baseUTC = Date.UTC(2024, 0, 1);
+
+  return Math.floor((targetUTC - baseUTC) / 86400000);
 }
 
 function getDateKey(dayIndex) {
@@ -108,14 +114,15 @@ function getDateKey(dayIndex) {
 }
 
 function formatPuzzleDate(dayIndex, format = "long") {
-  const puzzleDate = getPuzzleDate(dayIndex);
+  const d = new Date(PUZZLE_EPOCH_DATE);
+  d.setDate(1 + dayIndex);
 
   const options =
     format === "short"
       ? { month: "short", day: "numeric", year: "numeric" }
       : { month: "long", day: "numeric", year: "numeric" };
 
-  return puzzleDate.toLocaleDateString(undefined, options);
+  return d.toLocaleDateString(undefined, options);
 }
 
 function getTodayKey() {
