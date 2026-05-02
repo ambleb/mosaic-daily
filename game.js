@@ -623,8 +623,11 @@ function changeMonth(delta) {
   );
 
   const lastPuzzleIndex = Math.min(getDailyIndex(), getLastAvailablePuzzleIndex());
-  const lastPuzzleDate = getPuzzleDate(lastPuzzleIndex);
-  const maxMonth = new Date(lastPuzzleDate.getFullYear(), lastPuzzleDate.getMonth(), 1);
+
+  const maxMonthDate = new Date(PUZZLE_EPOCH_DATE);
+  maxMonthDate.setDate(PUZZLE_EPOCH_DATE.getDate() + lastPuzzleIndex);
+
+  const maxMonth = new Date(maxMonthDate.getFullYear(), maxMonthDate.getMonth(), 1);
   const nextMonthOnly = new Date(nextView.getFullYear(), nextView.getMonth(), 1);
 
   if (nextMonthOnly < minMonth) return;
