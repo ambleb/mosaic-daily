@@ -473,10 +473,7 @@ function updateRedoPuzzleButton() {
   const btn = document.getElementById("redoPuzzleBtn");
   if (!btn) return;
 
-  const isTodayPuzzle = selectedDay === getDailyIndex();
-  const shouldShow = showWin && isCompleted(selectedDay) && !isTodayPuzzle;
-
-  btn.classList.toggle("hidden", !shouldShow);
+  btn.classList.toggle("hidden", !showWin);
 }
 
 function openSupportOverlay() {
@@ -644,6 +641,10 @@ async function loadPuzzle(dayIndex) {
 
   refreshPuzzleUI();
   restoreInProgressPuzzleState(dayIndex);
+
+  if (showWin) {
+    shrinkCanvasForCompletedPuzzle();
+  }
 
   if (!showWin) {
     render();
@@ -916,6 +917,16 @@ function pointInTray(screenX, screenY) {
 
 function getOrientation() {
   return window.innerWidth > window.innerHeight ? "landscape" : "portrait";
+}
+
+function shrinkCanvasForCompletedPuzzle() {
+  if (!currentData) return;
+
+  const layout = getLayoutConfig();
+  const boardHeight = currentData.grid_height * cellSize;
+
+  const completedHeight = gameOffsetY + boardHeight + 32;
+  canvas.height = Math.max(window.innerHeight, completedHeight);
 }
 
 function resizeCanvas(forceRebuild = false) {
@@ -1259,6 +1270,8 @@ function startWinSequence() {
 
       pieces = [];
       showWin = true;
+	  shrinkCanvasForCompletedPuzzle();
+	  updateRedoPuzzleButton();
       render();
 
       setTimeout(() => {
