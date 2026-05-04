@@ -1303,7 +1303,11 @@ function drawWinFillOverlay() {
 }
 
 function drawGrid() {
+  ctx.fillStyle = getCSS("--cell-fill");
+  ctx.strokeStyle = getCSS("--grid-line");
+
   currentData.filled_cells.forEach(([x, y]) => {
+    ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
     ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
   });
 }

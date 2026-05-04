@@ -3,6 +3,7 @@
 ----------------------------- */
 :root {
   --bg: #f4f4f4;
+  --cell-fill: #e8e8e8;
   --grid-bg: #fafafa;
   --grid-line: #333;
   --text: #111;
@@ -10,6 +11,7 @@
 
 body.dark {
   --bg: #1e1e1e;
+  --cell-fill: #4a4a4a;
   --grid-bg: #3a3a3a;
   --grid-line: #d6d6d6;
   --text: #eee;
