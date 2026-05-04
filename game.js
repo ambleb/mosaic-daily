@@ -644,6 +644,7 @@ async function loadPuzzle(dayIndex) {
 
   if (showWin) {
     shrinkCanvasForCompletedPuzzle();
+	render();
   }
 
   if (!showWin) {
