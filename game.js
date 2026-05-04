@@ -582,30 +582,48 @@ function applyCompletedState(dayIndex) {
   clearCurrentPuzzleProgress(dayIndex);
 }
 
-async function loadPuzzle(dayIndex) {
+function preparePuzzleDay(dayIndex) {
   selectedDay = dayIndex;
   saveViewedDay(dayIndex);
+}
 
-  currentData = await fetchPuzzleDataForDay(dayIndex);
-  generateShapeColors();
-
-  resetPuzzleRuntimeState();
+function restoreSavedPuzzleState(dayIndex) {
   applyCompletedState(dayIndex);
 
+  if (!showWin) {
+    applySavedPuzzleProgress(dayIndex);
+  }
+}
+
+function refreshPuzzleUI() {
   document.getElementById("winOverlay").classList.remove("active");
   closeBeginOverlay();
 
   resizeCanvas(true);
   buildCalendar();
+}
 
-  if (!showWin) {
-    applySavedPuzzleProgress(dayIndex);
-    render();
-  }
-
+function maybeShowBeginOverlay() {
   if (getLayoutMode() === "phone") {
     openBeginOverlay();
   }
+}
+
+async function loadPuzzle(dayIndex) {
+  preparePuzzleDay(dayIndex);
+
+  currentData = await fetchPuzzleDataForDay(dayIndex);
+  generateShapeColors();
+
+  resetPuzzleRuntimeState();
+  refreshPuzzleUI();
+  restoreSavedPuzzleState(dayIndex);
+
+  if (!showWin) {
+    render();
+  }
+
+  maybeShowBeginOverlay();
 }
 
 // -----------------------------
