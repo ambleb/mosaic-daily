@@ -587,9 +587,11 @@ function preparePuzzleDay(dayIndex) {
   saveViewedDay(dayIndex);
 }
 
-function restoreSavedPuzzleState(dayIndex) {
+function restoreCompletedPuzzleState(dayIndex) {
   applyCompletedState(dayIndex);
+}
 
+function restoreInProgressPuzzleState(dayIndex) {
   if (!showWin) {
     applySavedPuzzleProgress(dayIndex);
   }
@@ -616,8 +618,10 @@ async function loadPuzzle(dayIndex) {
   generateShapeColors();
 
   resetPuzzleRuntimeState();
+  restoreCompletedPuzzleState(dayIndex);
+
   refreshPuzzleUI();
-  restoreSavedPuzzleState(dayIndex);
+  restoreInProgressPuzzleState(dayIndex);
 
   if (!showWin) {
     render();
