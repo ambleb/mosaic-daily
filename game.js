@@ -61,6 +61,8 @@ let labelsEnabled = false;
 let winAnimationActive = false;
 let winAnimationProgress = 0;
 
+let replayingSelectedPuzzle = false;
+
 let selectedDay = 0;
 let calendarOffset = 0;
 
@@ -467,6 +469,16 @@ function closeBeginOverlay() {
   showBeginOverlay = false;
 }
 
+function updateRedoPuzzleButton() {
+  const btn = document.getElementById("redoPuzzleBtn");
+  if (!btn) return;
+
+  const isTodayPuzzle = selectedDay === getDailyIndex();
+  const shouldShow = showWin && isCompleted(selectedDay) && !isTodayPuzzle;
+
+  btn.classList.toggle("hidden", !shouldShow);
+}
+
 function openSupportOverlay() {
   document.getElementById("supportOverlay").classList.add("active");
 }
@@ -573,6 +585,10 @@ function resetPuzzleRuntimeState() {
 }
 
 function applyCompletedState(dayIndex) {
+  if (replayingSelectedPuzzle && dayIndex === selectedDay) {
+    return;
+  }
+
   const saved = loadCompletedPuzzleState(dayIndex);
   if (!saved) return;
 
@@ -580,6 +596,12 @@ function applyCompletedState(dayIndex) {
   moveCount = saved.moves;
   pieces = [];
   clearCurrentPuzzleProgress(dayIndex);
+}
+
+async function redoSelectedPuzzle() {
+  clearCurrentPuzzleProgress(selectedDay);
+  replayingSelectedPuzzle = true;
+  await loadPuzzle(selectedDay);
 }
 
 function preparePuzzleDay(dayIndex) {
@@ -628,6 +650,8 @@ async function loadPuzzle(dayIndex) {
   }
 
   maybeShowBeginOverlay();
+  updateRedoPuzzleButton();
+  replayingSelectedPuzzle = false;
 }
 
 // -----------------------------
@@ -1529,6 +1553,7 @@ function handlePuzzleCompletion() {
   saveCompletedPuzzleState(selectedDay, moveCount);
   clearCurrentPuzzleProgress(selectedDay);
   applyTodayPuzzleCompletionToStreak();
+  updateRedoPuzzleButton();
   startWinSequence();
 }
 
