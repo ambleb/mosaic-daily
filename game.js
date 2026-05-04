@@ -926,8 +926,7 @@ function shrinkCanvasForCompletedPuzzle() {
   const layout = getLayoutConfig();
   const boardHeight = currentData.grid_height * cellSize;
 
-  const completedHeight = gameOffsetY + boardHeight + 32;
-  canvas.height = Math.max(window.innerHeight, completedHeight);
+  canvas.height = gameOffsetY + boardHeight + 32;
 }
 
 function resizeCanvas(forceRebuild = false) {
