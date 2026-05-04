@@ -1641,39 +1641,66 @@ function beginDraggingPiece(piece, startOffsetX, startOffsetY) {
   piece.placed = false;
 }
 
-function endPointer() {
-  if (showWin || !draggingPiece) return;
+function getDropTarget(piece) {
+  const gridX = Math.floor((piece.x + cellSize / 2) / cellSize);
+  const gridY = Math.floor((piece.y + cellSize / 2) / cellSize);
 
-  const dropGX = Math.floor((draggingPiece.x + cellSize / 2) / cellSize);
-  const dropGY = Math.floor((draggingPiece.y + cellSize / 2) / cellSize);
-  const dropValid = canPlace(draggingPiece, dropGX, dropGY);
+  return {
+    gridX,
+    gridY,
+    isValid: canPlace(piece, gridX, gridY)
+  };
+}
 
-  if (dropValid) {
-    if (isSamePlacement(draggingPiece, dropGX, dropGY)) {
-      restoreDraggedPiece();
-    } else {
-      placePiece(draggingPiece, dropGX, dropGY);
-      saveCurrentPuzzleProgress();
-    }
-
-    if (checkWin() && !showWin && !winAnimationActive) {
-      handlePuzzleCompletion();
-    }
-  } else {
-    if (dragStartPlaced) {
-      returnPieceToTray(draggingPiece);
-      saveCurrentPuzzleProgress();
-    } else {
-      restoreDraggedPiece();
-    }
+function handleValidDrop(piece, gx, gy) {
+  if (isSamePlacement(piece, gx, gy)) {
+    restoreDraggedPiece();
+    return;
   }
 
+  placePiece(piece, gx, gy);
+  saveCurrentPuzzleProgress();
+
+  if (checkWin() && !showWin && !winAnimationActive) {
+    handlePuzzleCompletion();
+  }
+}
+
+function handleInvalidDrop(piece) {
+  if (dragStartPlaced) {
+    returnPieceToTray(piece);
+    saveCurrentPuzzleProgress();
+  } else {
+    restoreDraggedPiece();
+  }
+}
+
+function resetDragVisualState() {
   ghostValid = false;
   ghostGX = 0;
   ghostGY = 0;
+}
+
+function finishDrag() {
+  resetDragVisualState();
   draggingPiece = null;
   pendingTouchPiece = null;
   render();
+}
+
+function endPointer() {
+  if (showWin || !draggingPiece) return;
+
+  const piece = draggingPiece;
+  const drop = getDropTarget(piece);
+
+  if (drop.isValid) {
+    handleValidDrop(piece, drop.gridX, drop.gridY);
+  } else {
+    handleInvalidDrop(piece);
+  }
+
+  finishDrag();
 }
 
 // -----------------------------
