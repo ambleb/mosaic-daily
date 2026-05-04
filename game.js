@@ -473,7 +473,7 @@ function updateRedoPuzzleButton() {
   const btn = document.getElementById("redoPuzzleBtn");
   if (!btn) return;
 
-  btn.classList.toggle("hidden", !showWin);
+  btn.style.display = showWin ? "block" : "none";
 }
 
 function openSupportOverlay() {
@@ -632,6 +632,9 @@ function maybeShowBeginOverlay() {
 
 async function loadPuzzle(dayIndex) {
   preparePuzzleDay(dayIndex);
+  
+  showWin = false;
+  updateRedoPuzzleButton();
 
   currentData = await fetchPuzzleDataForDay(dayIndex);
   generateShapeColors();
