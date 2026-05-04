@@ -91,6 +91,12 @@ function formatLocalDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+function getPuzzleDateLocal(dayIndex) {
+  const d = new Date(PUZZLE_EPOCH_DATE);
+  d.setDate(PUZZLE_EPOCH_DATE.getDate() + dayIndex);
+  return d;
+}
+
 function getPuzzleDate(dayIndex) {
   return new Date(Date.UTC(2024, 0, 1 + dayIndex));
 }
@@ -114,15 +120,14 @@ function getDateKey(dayIndex) {
 }
 
 function formatPuzzleDate(dayIndex, format = "long") {
-  const d = new Date(PUZZLE_EPOCH_DATE);
-  d.setDate(1 + dayIndex);
-
+  const puzzleDate = getPuzzleDateLocal(dayIndex);
+  
   const options =
     format === "short"
       ? { month: "short", day: "numeric", year: "numeric" }
       : { month: "long", day: "numeric", year: "numeric" };
 
-  return d.toLocaleDateString(undefined, options);
+  return puzzleDate.toLocaleDateString(undefined, options);
 }
 
 function getTodayKey() {
@@ -608,7 +613,7 @@ async function loadPuzzle(dayIndex) {
 // -----------------------------
 function changeMonth(delta) {
   const todayIndex = getDailyIndex();
-  const todayDate = getPuzzleDate(todayIndex);
+  const todayDate = getPuzzleDateLocal(todayIndex);
 
   const currentView = new Date(todayDate);
   currentView.setMonth(currentView.getMonth() + calendarOffset);
@@ -624,8 +629,7 @@ function changeMonth(delta) {
 
   const lastPuzzleIndex = Math.min(getDailyIndex(), getLastAvailablePuzzleIndex());
 
-  const maxMonthDate = new Date(PUZZLE_EPOCH_DATE);
-  maxMonthDate.setDate(PUZZLE_EPOCH_DATE.getDate() + lastPuzzleIndex);
+  const maxMonthDate = getPuzzleDateLocal(lastPuzzleIndex);
 
   const maxMonth = new Date(maxMonthDate.getFullYear(), maxMonthDate.getMonth(), 1);
   const nextMonthOnly = new Date(nextView.getFullYear(), nextView.getMonth(), 1);
@@ -647,7 +651,7 @@ function buildCalendar() {
   const minIndex = getCalendarStartIndex();
   const maxPuzzleIndex = getLastAvailablePuzzleIndex();
 
-  const baseDate = getPuzzleDate(todayIndex);
+  const baseDate = getPuzzleDateLocal(todayIndex);
   baseDate.setMonth(baseDate.getMonth() + calendarOffset);
 
   title.textContent = baseDate.toLocaleDateString(undefined, {
